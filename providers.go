@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	env "github.com/2HgO/quidax-go/config"
 	"github.com/2HgO/quidax-go/handlers"
 	"github.com/MadAppGang/httplog"
 	lzap "github.com/MadAppGang/httplog/zap"
@@ -29,7 +30,8 @@ func NewHttpServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.S
 	}
 	srv := &http.Server{
 		// Addr: ":55059",
-		Addr: "0.0.0.0:8080",
+		// Addr: "0.0.0.0:8080",
+		Addr: env.PORT,
 		// todo: handler request logger manually
 		Handler:      gHandlers.CORS(opts...)(httplog.LoggerWithConfig(config)(handlers.RecoveryMW(mux))),
 		WriteTimeout: time.Second * 15,
