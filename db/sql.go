@@ -24,10 +24,11 @@ func GetDataDBConnection(log *zap.Logger) *sql.DB {
 	log.Sugar().Info()
 	dataDBOnce.Do(func() {
 		cfg := mysql.Config{
-			User:      "root",
+			User:      config.DATA_DB_USER,
+			Passwd:    config.DATA_DB_PASSWORD,
 			Net:       "tcp",
-			Addr:      config.DATA_DB_URL, //"127.0.0.1:3306"
-			DBName:    "quidax-go",
+			Addr:      config.DATA_DB_URL,
+			DBName:    config.DATA_DB_NAME,
 			ParseTime: true,
 			Logger:    &dbLogger{log: log},
 		}

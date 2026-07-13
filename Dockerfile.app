@@ -1,23 +1,27 @@
-FROM golang:1.22.4
+FROM golang:1.22.4-bookworm AS builder
 
-# RUN apk add build-base
-# RUN apk --no-cache add openssl
+WORKDIR /src
 
-RUN mkdir -p /app
-
-WORKDIR /app
-
-COPY go.mod .
-
-COPY go.sum .
-
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/quidax-go .
 
-RUN GIT_TERMINAL_PROMPT=1 \
-    # CGO_CFLAGS='-O2 -g -w' \
-    CGO_ENABLED=1 \
-    go build -v -o quidax-go
+FROM debian:bookworm-slim
 
-CMD ["./quidax-go"]
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system app \
+    && useradd --system --gid app --home-dir /app app
+
+WORKDIR /app
+COPY --from=builder --chown=app:app /out/quidax-go ./quidax-go
+
+USER app
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
+    CMD curl --fail --silent http://127.0.0.1:8080/healthz || exit 1
+
+ENTRYPOINT ["/app/quidax-go"]

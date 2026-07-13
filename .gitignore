@@ -6,3 +6,9 @@ data/tigerbeetle/*
 data/mysql/*
 !**/.gitinclude
 env.MAK
+.env
+.env.*
+!.env.example
+secrets/*
+!secrets/.gitkeep
+!secrets/*.example

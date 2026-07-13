@@ -1,0 +1,190 @@
+name: Build and deploy
+
+on:
+  push:
+    branches:
+      - staging-migrated
+  workflow_dispatch:
+
+concurrency:
+  group: staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: app
+            dockerfile: Dockerfile.app
+          - image: mysql
+            dockerfile: Dockerfile.mysql
+          - image: tigerbeetle
+            dockerfile: Dockerfile.tigerbeetle
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Sign in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish ${{ matrix.image }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64' }}
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    env:
+      SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+      SSH_USER: ${{ secrets.DEPLOY_USER }}
+      SSH_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/quidax-go' }}
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || github.repository_owner }}
+      GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
+      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      APP_BIND_ADDRESS: ${{ vars.APP_BIND_ADDRESS || '127.0.0.1' }}
+      APP_PORT: ${{ vars.APP_PORT || '55059' }}
+      MYSQL_DATABASE: ${{ vars.MYSQL_DATABASE || 'quidax-go' }}
+      MYSQL_USER: ${{ vars.MYSQL_USER || 'quidax' }}
+      TIGERBEETLE_CACHE_GRID: ${{ vars.TIGERBEETLE_CACHE_GRID || '256MiB' }}
+      BACKEND_NETWORK_NAME: ${{ vars.BACKEND_NETWORK_NAME || 'quidax_backend' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 /dev/null "$HOME/.ssh/id_ed25519"
+          install -m 600 /dev/null "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Prepare deployment bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          install -d -m 700 deploy-bundle/secrets
+          install -m 600 compose.production.yml deploy-bundle/compose.yml
+
+          image_prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          {
+            printf 'IMAGE_PREFIX=%s\n' "$image_prefix"
+            printf 'IMAGE_TAG=%s\n' "$GITHUB_SHA"
+            printf 'APP_BIND_ADDRESS=%s\n' "$APP_BIND_ADDRESS"
+            printf 'APP_PORT=%s\n' "$APP_PORT"
+            printf 'MYSQL_DATABASE=%s\n' "$MYSQL_DATABASE"
+            printf 'MYSQL_USER=%s\n' "$MYSQL_USER"
+            printf 'TIGERBEETLE_CACHE_GRID=%s\n' "$TIGERBEETLE_CACHE_GRID"
+            printf 'BACKEND_NETWORK_NAME=%s\n' "$BACKEND_NETWORK_NAME"
+          } > deploy-bundle/.env
+
+          printf '%s' "$MYSQL_PASSWORD" > deploy-bundle/secrets/mysql_password
+          printf '%s' "$MYSQL_ROOT_PASSWORD" > deploy-bundle/secrets/mysql_root_password
+          printf '%s' "$GHCR_DEPLOY_TOKEN" > deploy-bundle/secrets/ghcr_token
+          chmod 600 deploy-bundle/.env deploy-bundle/secrets/*
+
+          tar -czf deploy-bundle.tar.gz -C deploy-bundle .
+          chmod 600 deploy-bundle.tar.gz
+
+      - name: Deploy on server
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "$SSH_PORT" =~ ^[0-9]+$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          remote="${SSH_USER}@${SSH_HOST}"
+          remote_bundle="/tmp/quidax-go-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+
+          scp -P "$SSH_PORT" deploy-bundle.tar.gz "${remote}:${remote_bundle}"
+          ssh -p "$SSH_PORT" "$remote" bash -s -- \
+            "$DEPLOY_PATH" "$remote_bundle" "$GHCR_USERNAME" <<'REMOTE'
+          set -euo pipefail
+          deploy_path="$1"
+          bundle="$2"
+          registry_username="$3"
+
+          cleanup() {
+            rm -f "$bundle" "$deploy_path/secrets/ghcr_token"
+            docker logout ghcr.io >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          umask 077
+
+          install -d -m 700 "$deploy_path"
+          tar -xzf "$bundle" -C "$deploy_path"
+          cd "$deploy_path"
+
+          chmod 700 secrets
+          # Compose implements local secrets as bind mounts. The directory is
+          # private on the host; 0644 lets the non-root app UID read its mount.
+          chmod 644 secrets/mysql_password
+          chmod 600 secrets/mysql_root_password secrets/ghcr_token
+
+          cat secrets/ghcr_token | docker login ghcr.io \
+            --username "$registry_username" --password-stdin
+          rm -f secrets/ghcr_token
+
+          docker compose --env-file .env -f compose.yml config --quiet
+          docker compose --env-file .env -f compose.yml pull
+          docker compose --env-file .env -f compose.yml up \
+            --detach --remove-orphans --wait --wait-timeout 180
+          docker compose --env-file .env -f compose.yml ps
+          REMOTE
+
+      - name: Remove runner deployment files
+        if: always()
+        shell: bash
+        run: rm -rf deploy-bundle deploy-bundle.tar.gz "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"

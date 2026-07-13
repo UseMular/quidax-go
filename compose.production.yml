@@ -1,8 +1,6 @@
 services:
   datadb:
-    build:
-      context: .
-      dockerfile: Dockerfile.mysql
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX is required}-mysql:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-quidax-go}
@@ -26,11 +24,7 @@ services:
       - no-new-privileges:true
 
   tigerbeetle:
-    build:
-      context: .
-      dockerfile: Dockerfile.tigerbeetle
-      args:
-        TIGERBEETLE_VERSION: ${TIGERBEETLE_VERSION:-0.16.11}
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX is required}-tigerbeetle:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: unless-stopped
     environment:
       TIGERBEETLE_CACHE_GRID: ${TIGERBEETLE_CACHE_GRID:-256MiB}
@@ -44,9 +38,7 @@ services:
       - seccomp=unconfined
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile.app
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX is required}-app:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: unless-stopped
     environment:
       DATA_DB_URL: datadb:3306
@@ -58,7 +50,7 @@ services:
     secrets:
       - mysql_password
     ports:
-      - "127.0.0.1:${APP_PORT:-55059}:8080"
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-55059}:8080"
     networks:
       - backend
     depends_on:
@@ -72,8 +64,6 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
-      # TigerBeetle 0.16.11's native client uses io_uring syscalls that are
-      # blocked by Docker's default seccomp profile.
       - seccomp=unconfined
 
 volumes:
@@ -86,6 +76,6 @@ networks:
 
 secrets:
   mysql_password:
-    file: ${MYSQL_PASSWORD_FILE:-./secrets/mysql_password}
+    file: ./secrets/mysql_password
   mysql_root_password:
-    file: ${MYSQL_ROOT_PASSWORD_FILE:-./secrets/mysql_root_password}
+    file: ./secrets/mysql_root_password

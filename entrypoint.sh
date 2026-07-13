@@ -1,8 +1,21 @@
 #!/bin/sh
+set -eu
 
-echo 'creating tigerbeetle file';
-[ ! -f /db/data/quidax_01.tigerbeetle ] && /db/tigerbeetle format --cluster=0 --development --replica=0 --replica-count=1 /db/data/quidax_01.tigerbeetle;
+data_file="${TIGERBEETLE_FILE:-/var/lib/tigerbeetle/0_0.tigerbeetle}"
 
-echo 'starting transaction db';
-/db/tigerbeetle start --addresses='0.0.0.0:3000' --development --cache-grid=512MiB /db/data/quidax_01.tigerbeetle &
-sleep 3 && /app/quidax-go;
+mkdir -p "$(dirname "$data_file")"
+
+if [ ! -s "$data_file" ]; then
+    tigerbeetle format \
+        --cluster=0 \
+        --replica=0 \
+        --replica-count=1 \
+        --development \
+        "$data_file"
+fi
+
+exec tigerbeetle start \
+    --addresses=0.0.0.0:3000 \
+    --development \
+    --cache-grid="${TIGERBEETLE_CACHE_GRID:-256MiB}" \
+    "$data_file"

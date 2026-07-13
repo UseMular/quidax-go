@@ -58,6 +58,11 @@ func NewHttpServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.S
 
 func NewServeMux(routers []handlers.Handler) *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
 	for _, router := range routers {
 		router.ServeHttp(mux)
 	}

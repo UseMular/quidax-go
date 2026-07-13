@@ -1,58 +1,27 @@
-# FROM --platform=linux/amd64 golang:1.22.4 AS go-builder
-FROM golang:1.22.4 AS go-builder
+FROM debian:bookworm-slim
 
-RUN mkdir -p /db
+ARG TIGERBEETLE_VERSION=0.16.11
+ARG TARGETARCH=amd64
 
-WORKDIR /db
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl netcat-openbsd unzip \
+    && case "${TARGETARCH}" in \
+         amd64) archive_arch=x86_64 ;; \
+         arm64) archive_arch=aarch64 ;; \
+         *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && curl --fail --location --show-error \
+         --output /tmp/tigerbeetle.zip \
+         "https://github.com/tigerbeetle/tigerbeetle/releases/download/${TIGERBEETLE_VERSION}/tigerbeetle-${archive_arch}-linux.zip" \
+    && unzip /tmp/tigerbeetle.zip -d /usr/local/bin \
+    && chmod 0755 /usr/local/bin/tigerbeetle \
+    && rm -rf /tmp/tigerbeetle.zip /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y unzip
+COPY --chmod=0755 entrypoint.sh /usr/local/bin/tigerbeetle-entrypoint
 
-# RUN curl -Lo tigerbeetle.zip https://github.com/tigerbeetle/tigerbeetle/releases/download/0.16.11/tigerbeetle-x86_64-linux.zip && unzip tigerbeetle.zip
-RUN curl -Lo tigerbeetle.zip https://github.com/tigerbeetle/tigerbeetle/releases/download/0.16.11/tigerbeetle-aarch64-linux.zip && unzip tigerbeetle.zip
+VOLUME ["/var/lib/tigerbeetle"]
+EXPOSE 3000
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=10 \
+    CMD grep -q ':0BB8 .* 0A ' /proc/net/tcp || exit 1
 
-RUN mkdir -p /db/data
-
-# RUN apk add build-base
-# RUN apk --no-cache add openssl
-
-RUN mkdir -p /app
-
-WORKDIR /app
-
-COPY go.mod .
-
-COPY go.sum .
-
-RUN go mod download
-
-COPY . .
-
-RUN GIT_TERMINAL_PROMPT=1 \
-    # CGO_CFLAGS='-O2 -g -w' \
-    CGO_ENABLED=1 \
-    go build -v -o quidax-go
-
-# EXPOSE 80
-
-# EXPOSE 3000
-
-# CMD ["./quidax-go"]
-
-# FROM ghcr.io/tigerbeetle/tigerbeetle:0.16.11
-
-# RUN mkdir -p /data
-# RUN mkdir -p /app
-
-# RUN apk add --no-cache make build-base
-
-# COPY --from=go-builder /app/quidax-go /app/quidax-go
-
-# COPY Makefile /Makefile
-
-# COPY entrypoint.sh /entrypoint.sh
-
-RUN chmod +x /app/entrypoint.sh
-
-EXPOSE 8080
-
-ENTRYPOINT [ "/app/entrypoint.sh" ]
+ENTRYPOINT ["/usr/local/bin/tigerbeetle-entrypoint"]
