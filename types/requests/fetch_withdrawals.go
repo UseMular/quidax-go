@@ -4,6 +4,6 @@ import "github.com/2HgO/quidax-go/models"
 
 type FetchWithdrawalsRequest struct {
 	UserID   string                   `uri:"user_id" validate:"required"`
-	Currency *string                  `query:"currency" validate:"omitempty,oneof=ngn usdt usdc eth bnb sol btc trx"`
+	Currency *string                  `query:"currency" validate:"omitempty,oneof=ngn usdt usdc eth bnb sol btc trx dash ton xrp"`
 	State    *models.WithdrawalStatus `query:"state"`
 }

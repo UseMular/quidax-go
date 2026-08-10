@@ -27,6 +27,7 @@ type AccountService interface {
 	EditSubAccountDetails(context.Context, *requests.EditSubAccountDetailsRequest) (*responses.Response[*models.Account], error)
 	FetchAllSubAccounts(context.Context, *requests.FetchAllSubAccountsRequest) (*responses.Response[[]*models.Account], error)
 	FetchAccountDetails(context.Context, *requests.FetchAccountDetailsRequest) (*responses.Response[*models.Account], error)
+	SupportNewToken(context.Context, string) error
 
 	CreateAccount(context.Context, *requests.CreateAccountRequest) (*responses.Response[*responses.CreateAccountResponseData], error)
 	UpdateWebHookURL(context.Context, *requests.UpdateWebhookURLRequest) error
@@ -410,4 +411,71 @@ func (a *accountService) FetchAllSubAccounts(ctx context.Context, req *requests.
 		Status: "success",
 		Data:   res,
 	}, nil
+}
+
+func (a *accountService) SupportNewToken(ctx context.Context, token string) error {
+	parent := ctx.Value("user").(*models.Account)
+	subAccounts, err := a.FetchAllSubAccounts(ctx, nil)
+	if err != nil {
+		return err
+	}
+	hasParentAccount := false
+	for _, account := range subAccounts.Data {
+		if account.ID == parent.ID {
+			hasParentAccount = true
+			break
+		}
+	}
+	if !hasParentAccount {
+		subAccounts.Data = append(subAccounts.Data, parent)
+	}
+	wallets := make([]tdb_types.Account, 0, len(subAccounts.Data))
+	walletsInsertStmt := sq.
+		Insert("wallets").
+		Columns("id", "account_id", "token")
+	ledgerId := LedgerIDs[token]
+	for _, subAccount := range subAccounts.Data {
+		wallet := tdb_types.Account{
+			ID: tdb_types.ID(),
+			Flags: tdb_types.AccountFlags{
+				History:                    true,
+				DebitsMustNotExceedCredits: true,
+				Linked:                     false,
+			}.ToUint16(),
+			Ledger:      ledgerId,
+			Code:        1,
+			UserData128: tdb_types.BytesToUint128(uuid.MustParse(subAccount.ID)),
+		}
+		wallets = append(wallets, wallet)
+		walletsInsertStmt = walletsInsertStmt.
+			Values(wallet.ID.String(), subAccount.ID, Ledgers[wallet.Ledger])
+	}
+
+	tx, err := a.dataDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	// Defer a rollback in case anything fails.
+	defer tx.Rollback()
+
+	_, err = walletsInsertStmt.
+		RunWith(tx).
+		ExecContext(ctx)
+	if err != nil {
+		return errors.HandleDataDBError(err)
+	}
+
+	txRes, err := a.transactionDB.CreateAccounts(wallets)
+	if err != nil {
+		return errors.HandleTxDBError(err)
+	}
+	if len(txRes) > 0 {
+		return errors.NewUnknownError(txRes[0].Result.String())
+	}
+
+	if err = tx.Commit(); err != nil {
+		return errors.HandleDataDBError(err)
+	}
+
+	return nil
 }

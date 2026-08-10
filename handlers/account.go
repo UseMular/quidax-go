@@ -36,6 +36,7 @@ func (a *accountHandler) ServeHttp(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/accounts", a.CreateAccount)
 
 	mux.HandleFunc("PUT /api/v1/accounts", a.middlewares.AttachValidateAccessToken(a.UpdateWebHookURL))
+	mux.HandleFunc("POST /api/v1/accounts/new-token", a.middlewares.AttachValidateAccessToken(a.SupportNewToken))
 
 	mux.HandleFunc("POST /api/v1/users", a.middlewares.AttachValidateAccessToken(a.CreateSubAccount))
 	mux.HandleFunc("GET /api/v1/users", a.middlewares.AttachValidateAccessToken(a.FetchAllSubAccounts))
@@ -114,4 +115,15 @@ func (a *accountHandler) FetchAllSubAccounts(w http.ResponseWriter, r *http.Requ
 	}
 
 	utils.JSON(w, 200, res)
+}
+
+func (a *accountHandler) SupportNewToken(w http.ResponseWriter, r *http.Request) {
+	req := utils.Bind[struct {Currency string `json:"currency"`}](r)
+
+	if err := a.accountService.SupportNewToken(r.Context(), req.Currency); err != nil {
+		errors.AsAppError(err).Serialize(w)
+		return
+	}
+
+	utils.JSON(w, 204, "")
 }
