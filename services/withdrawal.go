@@ -23,12 +23,13 @@ type WithdrawalService interface {
 	FetchWithdrawals(context.Context, *requests.FetchWithdrawalsRequest) (*responses.Response[[]*responses.WithdrawalResponseData], error)
 }
 
-func NewWithdrawalService(txDatabase tdb.Client, dataDatabase *sql.DB, accountService AccountService, walletService WalletService, webhookService WebhookService, log *zap.Logger) WithdrawalService {
+func NewWithdrawalService(txDatabase tdb.Client, dataDatabase *sql.DB, accountService AccountService, walletService WalletService, webhookService WebhookService, depositService DepositService, log *zap.Logger) WithdrawalService {
 	return &withdrawalService{
 		service{
 			transactionDB:  txDatabase,
 			dataDB:         dataDatabase,
 			accountService: accountService,
+			depositService: depositService,
 			walletService:  walletService,
 			webhookService: webhookService,
 			log:            log,
@@ -51,40 +52,49 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 		return nil, err
 	}
 	destination, err := w.walletService.FetchUserWallet(context.WithValue(ctx, "skip_check", true), &requests.FetchUserWalletRequest{UserID: req.FundUid, Currency: req.Currency})
-	if err != nil {
-		if (uuid.Validate(req.FundUid) != nil) {
-			return &responses.Response[*responses.WithdrawalResponseData]{
-				Status:  "success",
-				Message: "Successful",
-				Data: nil,
-			}, nil
-		} else {
-			return nil, err
-		}
-	}
-	destinationID, err := tdb_types.HexStringToUint128(destination.Data.ID)
-	if err != nil {
-		return nil, err
-	}
+	// if err != nil {
+	// 	return nil, err
+	// }
+
 
 	txID := tdb_types.ID()
+	txID2 := tdb_types.ID()
 	id := uuid.New()
-	withdrawal := &models.Withdrawal{
-		ID:              id.String(),
-		WalletID:        wallet.Data.ID,
-		Ref:             txID.String(), // ref == tx_id for all internal withdrawals
-		TxID:            txID.String(),
-		TransactionNote: req.TransactionNote,
-		Narration:       req.Narration,
-		// todo: handle other destination types
-		Status: models.Completed_WithdrawalStatus,
-		Recipient: &models.Recipient{
-			Type: models.Internal_RecipientType,
-			Details: &models.RecipientDetails{
-				Name:           utils.String(destination.Data.User.FirstName),
-				DestinationTag: utils.String(destination.Data.User.ID),
+	var withdrawal *models.Withdrawal
+	if destination == nil || destination.Status != "successful" {
+		w.log.Error("Error fetching internal destination", zap.Any("req", req), zap.Error(err))
+		withdrawal = &models.Withdrawal{
+			ID:              id.String(),
+			WalletID:        wallet.Data.ID,
+			Ref:             txID.String(), // ref == tx_id for all internal withdrawals
+			TxID:            txID.String(),
+			TransactionNote: req.TransactionNote,
+			Narration:       req.Narration,
+			Status:          models.Completed_WithdrawalStatus,
+			Recipient: &models.Recipient{
+				Type: models.CoinAddress_RecipientType,
+				Details: &models.RecipientDetails{
+					Address: &req.FundUid,
+				},
 			},
-		},
+		}
+	} else {
+		withdrawal = &models.Withdrawal{
+			ID:              id.String(),
+			WalletID:        wallet.Data.ID,
+			Ref:             txID.String(), // ref == tx_id for all internal withdrawals
+			TxID:            txID.String(),
+			TransactionNote: req.TransactionNote,
+			Narration:       req.Narration,
+			Status:          models.Completed_WithdrawalStatus,
+			Recipient: &models.Recipient{
+				Type: models.Internal_RecipientType,
+				Details: &models.RecipientDetails{
+					Name:           utils.String(destination.Data.User.FirstName),
+					DestinationTag: utils.String(destination.Data.User.ID),
+				},
+			},
+		}
 	}
 
 	tx, err := w.dataDB.BeginTx(ctx, nil)
@@ -116,33 +126,92 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 	}
 
 	now := time.Now()
-	trf := tdb_types.Transfer{
-		ID:              txID,
-		DebitAccountID:  walletID,
-		CreditAccountID: destinationID,
-		Amount:          utils.ToAmount(amount),
-		Ledger:          LedgerIDs[req.Currency],
-		UserData128:     tdb_types.BytesToUint128(uuid.MustParse(wallet.Data.User.ID)),
-		Code:            2,
-	}
-	res, err := w.transactionDB.CreateTransfers([]tdb_types.Transfer{trf})
-	if err != nil {
-		return nil, errors.HandleTxDBError(err)
-	}
-	if len(res) > 0 {
-		for _, r := range res {
-			if r.Result == tdb_types.TransferExceedsCredits {
-				return nil, errors.NewFailedDependencyError("Insufficient Balance")
+	isExternal := false
+	if destination == nil || destination.Status != "successful" {
+		trf := tdb_types.Transfer{
+			ID:              txID,
+			DebitAccountID:  walletID,
+			CreditAccountID: tdb_types.ToUint128(uint64(LedgerIDs[req.Currency])),
+			Amount:          utils.ToAmount(amount),
+			Ledger:          LedgerIDs[req.Currency],
+			UserData128:     tdb_types.BytesToUint128(uuid.MustParse(wallet.Data.User.ID)),
+			Code:            3,
+		}
+		_, err := w.transactionDB.CreateTransfers([]tdb_types.Transfer{trf})
+		if err != nil {
+			return nil, errors.HandleTxDBError(err)
+		}
+	} else {
+		destinationID, err := tdb_types.HexStringToUint128(destination.Data.ID)
+		if err != nil {
+			return nil, err
+		}
+		var transfers []tdb_types.Transfer
+		if (destination.Data.User.ParentID != nil && wallet.Data.User.ParentID != nil && *destination.Data.User.ParentID == *wallet.Data.User.ParentID) ||
+			(destination.Data.User.ParentID != nil && *destination.Data.User.ParentID == wallet.Data.User.ID) ||
+			(wallet.Data.User.ParentID != nil && *wallet.Data.User.ParentID == destination.Data.User.ID) {
+			transfers = []tdb_types.Transfer{
+				{
+					ID:              txID,
+					DebitAccountID:  walletID,
+					CreditAccountID: destinationID,
+					Amount:          utils.ToAmount(amount),
+					Ledger:          LedgerIDs[req.Currency],
+					UserData128:     tdb_types.BytesToUint128(uuid.MustParse(wallet.Data.User.ID)),
+					Code:            2,
+				},
+			}
+		} else {
+			isExternal = true
+			transfers = []tdb_types.Transfer{
+				{
+					ID:              txID,
+					DebitAccountID:  walletID,
+					CreditAccountID: tdb_types.ToUint128(uint64(LedgerIDs[req.Currency])),
+					Amount:          utils.ToAmount(amount),
+					Ledger:          LedgerIDs[req.Currency],
+					UserData128:     tdb_types.BytesToUint128(uuid.MustParse(wallet.Data.User.ID)),
+					Code:            3,
+				},
+				{
+					ID:              txID2,
+					DebitAccountID:  tdb_types.ToUint128(uint64(LedgerIDs[req.Currency])),
+					CreditAccountID: destinationID,
+					Amount:          utils.ToAmount(amount),
+					Ledger:          LedgerIDs[req.Currency],
+					UserData128:     tdb_types.BytesToUint128(uuid.MustParse(destination.Data.User.ID)),
+					Code:            3,
+				},
 			}
 		}
-		return nil, errors.NewUnknownError(res[0].Result.String())
+		res, err := w.transactionDB.CreateTransfers(transfers)
+		if err != nil {
+			return nil, errors.HandleTxDBError(err)
+		}
+		if len(res) > 0 {
+			for _, r := range res {
+				if r.Result == tdb_types.TransferExceedsCredits {
+					return nil, errors.NewFailedDependencyError("Insufficient Balance")
+				}
+			}
+			return nil, errors.NewUnknownError(res[0].Result.String())
+		}
 	}
 
 	if err = tx.Commit(); err != nil {
 		return nil, errors.HandleDataDBError(err)
 	}
 
-	// ?todo make asynchronous when third party payment processor implemented
+	if destination != nil && destination.Status == "successful" && isExternal {
+		data, err := w.depositService.FetchDeposit(context.WithValue(ctx, "skip_check", true), &requests.FetchDepositRequest{
+			UserID:        destination.Data.User.ID,
+			TransactionID: txID2.String(),
+		})
+		if err == nil {
+			go w.webhookService.SendDepositSuccessfulEvent(destination.Data.User.WebhookDetails, data.Data)
+		}
+	}
+
 	data := &responses.WithdrawalResponseData{
 		ID:              withdrawal.ID,
 		Reference:       withdrawal.Ref,
