@@ -10,6 +10,7 @@ import (
 type service struct {
 	transactionDB  tdb.Client
 	dataDB         *sql.DB
+	depositService DepositService
 	accountService AccountService
 	swapService    InstantSwapService
 	walletService  WalletService
