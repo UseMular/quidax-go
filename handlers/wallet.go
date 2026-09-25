@@ -43,7 +43,8 @@ func (ws *walletHandler) FetchPaymentAddress(w http.ResponseWriter, r *http.Requ
 	}
 	wallet := walletRes.Data
 	utils.JSON(w, 200, responses.Response[any]{
-		Status: "successful",
+		Status:  "success",
+		Message: "Successful",
 		Data: map[string]any{
 			"id":              wallet.ID,
 			"reference":       wallet.ID,
@@ -64,16 +65,17 @@ func (ws *walletHandler) FetchPaymentAddresses(w http.ResponseWriter, r *http.Re
 	}
 	wallet := walletRes.Data
 	utils.JSON(w, 200, responses.Response[[]map[string]any]{
-		Status: "successful",
+		Status:  "success",
+		Message: "Successful",
 		Data: []map[string]any{
 			{
 				"id":              wallet.ID,
 				"reference":       wallet.ID,
 				"currency":        wallet.Currency,
-				"address":         "",
+				"address":         "foobar",
 				"destination_tag": "deposit_not_supported",
 				"total_payments":  "0",
-				"network":         "",
+				"network":         "bep20",
 			},
 		},
 	})
@@ -113,12 +115,13 @@ func (ws *walletHandler) FetchWalletAddress(w http.ResponseWriter, r *http.Reque
 	}
 	wallet := walletRes.Data
 	utils.JSON(w, 200, responses.Response[any]{
-		Status: "successful",
+		Status:  "success",
+		Message: "Successful",
 		Data: map[string]any{
 			"id":              wallet.ID,
 			"reference":       wallet.ID,
 			"currency":        wallet.Currency,
-			"address":         "",
+			"address":         "foobar",
 			"destination_tag": "",
 			"total_payments":  "0",
 			"network":         "",

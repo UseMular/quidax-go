@@ -1,1 +1,10 @@
-data/*
+.git
+.agents
+.codex
+.env
+.env.*
+secrets
+data
+env.MAK
+quidax-go
+*.log

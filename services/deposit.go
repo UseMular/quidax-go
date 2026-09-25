@@ -126,8 +126,9 @@ func (d *depositService) FetchDeposit(ctx context.Context, req *requests.FetchDe
 	}
 
 	return &responses.Response[*responses.DepositResponseData]{
-		Status: "successful",
-		Data:   data,
+		Status:  "success",
+		Message: "Successful",
+		Data:    data,
 	}, nil
 }
 
@@ -192,7 +193,8 @@ func (d *depositService) FetchDeposits(ctx context.Context, req *requests.FetchD
 	}
 
 	return &responses.Response[[]*responses.DepositResponseData]{
-		Status: "successful",
-		Data:   data,
+		Status:  "success",
+		Message: "Successful",
+		Data:    data,
 	}, nil
 }

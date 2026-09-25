@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/2HgO/quidax-go/errors"
@@ -37,10 +38,10 @@ func (i *instantSwapHandler) ServeHttp(mux *http.ServeMux) {
 	for k := range services.Rates {
 		for j := range services.Rates {
 			markets[k+j] = map[string]any{
-				"ticker": map[string]float64{
-					"open": services.Rates[k][j],
-					"buy":  services.Rates[k][j],
-					"sell": services.Rates[j][k],
+				"ticker": map[string]any{
+					"open": fmt.Sprintf("%f", services.Rates[k][j]),
+					"buy":  fmt.Sprintf("%f", services.Rates[k][j]),
+					"sell": fmt.Sprintf("%f", services.Rates[j][k]),
 				},
 				"market": k + j,
 			}

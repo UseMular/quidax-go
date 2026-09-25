@@ -90,7 +90,8 @@ func (i *instantSwapService) QuoteInstantSwap(ctx context.Context, req *requests
 	}
 
 	return &responses.Response[*responses.QuoteInstantSwapResponseData]{
-		Data: data,
+		Status: "success",
+		Data:   data,
 	}, nil
 }
 
@@ -217,8 +218,9 @@ func (i *instantSwapService) CreateInstantSwap(ctx context.Context, req *request
 	go i.webhookService.SendWalletUpdatedEvent(parent.WebhookDetails, fromWallet.Data)
 
 	return &responses.Response[*responses.InstantSwapQuotationResponseData]{
-		Status: "successful",
-		Data:   data,
+		Status:  "success",
+		Message: "Successful",
+		Data:    data,
 	}, nil
 }
 
@@ -270,7 +272,8 @@ func (i *instantSwapService) ConfirmInstantSwap(ctx context.Context, req *reques
 	go i.processSwap(swap, now, transactions)
 
 	return &responses.Response[*responses.InstantSwapResponseData]{
-		Status: "successful",
+		Status:  "success",
+		Message: "Successful",
 		Data: &responses.InstantSwapResponseData{
 			ID:             swap.ID,
 			FromCurrency:   Ledgers[transactions[0].Ledger],
@@ -300,7 +303,7 @@ func (i *instantSwapService) ConfirmInstantSwap(ctx context.Context, req *reques
 }
 
 func (i *instantSwapService) processSwap(swap models.InstantSwap, ts time.Time, transactions []tdb_types.Transfer) {
-	failed := utils.FromAmount(transactions[0].Amount) > 100
+	failed := utils.FromAmount(transactions[0].Amount) > 500000
 
 	user, err := i.accountService.FetchAccountDetails(context.WithValue(context.Background(), "skip_check", true), &requests.FetchAccountDetailsRequest{UserID: uuid.UUID(transactions[0].UserData128.Bytes()).String()})
 	if err != nil {
@@ -324,8 +327,8 @@ func (i *instantSwapService) processSwap(swap models.InstantSwap, ts time.Time, 
 			Code:            1,
 			Flags: tdb_types.TransferFlags{
 				Linked:              true,
-				PostPendingTransfer: utils.FromAmount(transactions[0].Amount) <= 100,
-				VoidPendingTransfer: utils.FromAmount(transactions[0].Amount) > 100,
+				PostPendingTransfer: utils.FromAmount(transactions[0].Amount) <= 500000,
+				VoidPendingTransfer: utils.FromAmount(transactions[0].Amount) > 500000,
 			}.ToUint16(),
 		},
 		{
@@ -338,8 +341,8 @@ func (i *instantSwapService) processSwap(swap models.InstantSwap, ts time.Time, 
 			PendingID:       transactions[1].ID,
 			Code:            1,
 			Flags: tdb_types.TransferFlags{
-				PostPendingTransfer: utils.FromAmount(transactions[0].Amount) <= 100,
-				VoidPendingTransfer: utils.FromAmount(transactions[0].Amount) > 100,
+				PostPendingTransfer: utils.FromAmount(transactions[0].Amount) <= 500000,
+				VoidPendingTransfer: utils.FromAmount(transactions[0].Amount) > 500000,
 			}.ToUint16(),
 		},
 	}
@@ -401,12 +404,13 @@ failedTransfer:
 
 	switch failed {
 	case true:
+		data.Status = "error"
 		i.webhookService.
 			SendInstantSwapFailedEvent(user.Data.WebhookDetails, data)
 
 		// todo: send wallet updated event for debit wallet
 	default:
-		data.Status = "failed"
+		data.Status = "success"
 		i.webhookService.
 			SendInstantSwapCompletedEvent(user.Data.WebhookDetails, data)
 
@@ -467,8 +471,9 @@ func (i *instantSwapService) FetchInstantSwapTransaction(ctx context.Context, re
 	}
 
 	return &responses.Response[*responses.InstantSwapResponseData]{
-		Status: "successful",
-		Data:   data[0],
+		Status:  "success",
+		Message: "Successful",
+		Data:    data[0],
 	}, nil
 }
 
@@ -534,8 +539,9 @@ func (i *instantSwapService) GetInstantSwapTransactions(ctx context.Context, req
 	}
 
 	return &responses.Response[[]*responses.InstantSwapResponseData]{
-		Status: "successful",
-		Data:   data,
+		Status:  "success",
+		Message: "Successful",
+		Data:    data,
 	}, nil
 }
 

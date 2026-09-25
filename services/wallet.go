@@ -131,13 +131,21 @@ func (w *walletService) FetchUserWallets(ctx context.Context, req *requests.Fetc
 			CreatedAt:         time.UnixMicro(int64(res[i].Timestamp / 1000)),
 			UpdatedAt:         time.UnixMicro(int64(res[i].Timestamp / 1000)),
 			ReferenceCurrency: "ngn",
-			IsCrypto:          wallet.Token != "ngn",
+			Networks: []any{map[string]any{
+				"id":                "bep20",
+				"name":              "Binance Smart Chain",
+				"deposits_enabled":  false,
+				"withdraws_enabled": false,
+			}},
+			DepositAddress: utils.String("0x34r21r3f4gr1r3rf31r2r"),
+			IsCrypto:       wallet.Token != "ngn",
 		}
 	}
 
 	return &responses.Response[[]*responses.UserWalletResponseData]{
-		Status: "successful",
-		Data:   data,
+		Status:  "success",
+		Message: "Successful",
+		Data:    data,
 	}, nil
 }
 
@@ -181,22 +189,30 @@ func (w *walletService) FetchUserWallet(ctx context.Context, req *requests.Fetch
 	balance := credits.Sub(&credits, &debits)
 	balance = balance.Sub(balance, &pendingDebits)
 	data := &responses.UserWalletResponseData{
-		ID:                wallet.ID,
-		Name:              cases.Upper(language.English).String(wallet.Token),
-		Currency:          wallet.Token,
-		Balance:           utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))),
-		LockedBalance:     utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(pendingDebits))),
-		User:              user.Data,
-		ConvertedBalance:  utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))) * Rates[wallet.Token]["ngn"],
-		CreatedAt:         time.UnixMicro(int64(res[0].Timestamp / 1000)),
-		UpdatedAt:         time.UnixMicro(int64(res[0].Timestamp / 1000)),
+		ID:               wallet.ID,
+		Name:             cases.Upper(language.English).String(wallet.Token),
+		Currency:         wallet.Token,
+		Balance:          utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))),
+		LockedBalance:    utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(pendingDebits))),
+		User:             user.Data,
+		ConvertedBalance: utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))) * Rates[wallet.Token]["ngn"],
+		CreatedAt:        time.UnixMicro(int64(res[0].Timestamp / 1000)),
+		UpdatedAt:        time.UnixMicro(int64(res[0].Timestamp / 1000)),
+		Networks: []any{map[string]any{
+			"id":                "bep20",
+			"name":              "Binance Smart Chain",
+			"deposits_enabled":  false,
+			"withdraws_enabled": false,
+		}},
+		DepositAddress:    utils.String("0x34r21r3f4gr1r3rf31r2r"),
 		ReferenceCurrency: "ngn",
 		IsCrypto:          wallet.Token == "ngn",
 	}
 
 	return &responses.Response[*responses.UserWalletResponseData]{
-		Status: "successful",
-		Data:   data,
+		Status:  "success",
+		Message: "Successful",
+		Data:    data,
 	}, nil
 }
 
@@ -257,15 +273,22 @@ func (w *walletService) LookupWallets(ctx context.Context, ids []string) (map[st
 		user := accountMap[wallet.AccountID]
 
 		data[res[i].ID.String()] = &responses.UserWalletResponseData{
-			ID:                wallet.ID,
-			Name:              cases.Upper(language.English).String(wallet.Token),
-			Currency:          wallet.Token,
-			Balance:           utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))),
-			LockedBalance:     utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(pendingDebits))),
-			User:              user,
-			ConvertedBalance:  utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))) * Rates[wallet.Token]["ngn"],
-			CreatedAt:         time.UnixMicro(int64(res[i].Timestamp / 1000)),
-			UpdatedAt:         time.UnixMicro(int64(res[i].Timestamp / 1000)),
+			ID:               wallet.ID,
+			Name:             cases.Upper(language.English).String(wallet.Token),
+			Currency:         wallet.Token,
+			Balance:          utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))),
+			LockedBalance:    utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(pendingDebits))),
+			User:             user,
+			ConvertedBalance: utils.ApproximateAmount(wallet.Token, utils.FromAmount(tdb_types.BigIntToUint128(*balance))) * Rates[wallet.Token]["ngn"],
+			CreatedAt:        time.UnixMicro(int64(res[i].Timestamp / 1000)),
+			UpdatedAt:        time.UnixMicro(int64(res[i].Timestamp / 1000)),
+			Networks: []any{map[string]any{
+				"id":                "bep20",
+				"name":              "Binance Smart Chain",
+				"deposits_enabled":  false,
+				"withdraws_enabled": false,
+			}},
+			DepositAddress:    utils.String("0x34r21r3f4gr1r3rf31r2r"),
 			ReferenceCurrency: "ngn",
 			IsCrypto:          wallet.Token != "ngn",
 		}

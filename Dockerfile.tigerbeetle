@@ -1,9 +1,27 @@
-FROM ghcr.io/tigerbeetle/tigerbeetle:0.16.11
+FROM debian:bookworm-slim
 
-RUN mkdir -p /data
+ARG TIGERBEETLE_VERSION=0.16.11
+ARG TARGETARCH=amd64
 
-COPY entrypoint.sh /entrypoint.sh
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl netcat-openbsd unzip \
+    && case "${TARGETARCH}" in \
+         amd64) archive_arch=x86_64 ;; \
+         arm64) archive_arch=aarch64 ;; \
+         *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && curl --fail --location --show-error \
+         --output /tmp/tigerbeetle.zip \
+         "https://github.com/tigerbeetle/tigerbeetle/releases/download/${TIGERBEETLE_VERSION}/tigerbeetle-${archive_arch}-linux.zip" \
+    && unzip /tmp/tigerbeetle.zip -d /usr/local/bin \
+    && chmod 0755 /usr/local/bin/tigerbeetle \
+    && rm -rf /tmp/tigerbeetle.zip /var/lib/apt/lists/*
 
-RUN chmod +x /entrypoint.sh
+COPY --chmod=0755 entrypoint.sh /usr/local/bin/tigerbeetle-entrypoint
 
-ENTRYPOINT [ "/entrypoint.sh" ]
+VOLUME ["/var/lib/tigerbeetle"]
+EXPOSE 3000
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=10 \
+    CMD grep -q ':0BB8 .* 0A ' /proc/net/tcp || exit 1
+
+ENTRYPOINT ["/usr/local/bin/tigerbeetle-entrypoint"]

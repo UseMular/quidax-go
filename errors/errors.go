@@ -33,6 +33,7 @@ const (
 
 type AppError struct {
 	Code     int       `json:"-"`
+	Status   string    `json:"status"`
 	Type     ErrorType `json:"type"`
 	Message  string    `json:"message"`
 	Internal string    `json:"internal,omitempty"`
@@ -77,9 +78,9 @@ func HandleBindError(err error) AppError {
 		var message string
 		switch v[0].ActualTag() {
 		case "required":
-			message = fmt.Sprintf("%s is requried", v[0].Field())
+			message = fmt.Sprintf("%s is required", v[0].Field())
 		case "required_without":
-			message = fmt.Sprintf("%s is requried when %s is not provided", v[0].Field(), v[0].Param())
+			message = fmt.Sprintf("%s is required when %s is not provided", v[0].Field(), v[0].Param())
 		case "oneof":
 			message = fmt.Sprintf("%s must be one of values: (%s), value received: %s", v[0].Field(), v[0].Param(), v[0].Value())
 		case "gt":
@@ -154,6 +155,7 @@ func NewInvalidTokenError() AppError {
 func NewFatalError(err error) AppError {
 	debug.PrintStack()
 	return AppError{
+		Status:   "error",
 		Code:     http.StatusInternalServerError,
 		Type:     ErrFatal,
 		Message:  "Oops! something happened on our end.",
@@ -184,6 +186,7 @@ func NewImplementationError() AppError {
 func AsAppError(err error) AppError {
 	apperr := new(AppError)
 	if errors.As(err, apperr) {
+		apperr.Status = "error"
 		return *apperr
 	}
 	return NewFatalError(err)
