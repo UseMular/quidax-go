@@ -303,7 +303,7 @@ func (i *instantSwapService) ConfirmInstantSwap(ctx context.Context, req *reques
 }
 
 func (i *instantSwapService) processSwap(swap models.InstantSwap, ts time.Time, transactions []tdb_types.Transfer) {
-	failed := utils.FromAmount(transactions[0].Amount) > 500000
+	failed := utils.FromAmount(transactions[0].Amount) == 500000
 
 	user, err := i.accountService.FetchAccountDetails(context.WithValue(context.Background(), "skip_check", true), &requests.FetchAccountDetailsRequest{UserID: uuid.UUID(transactions[0].UserData128.Bytes()).String()})
 	if err != nil {
@@ -327,8 +327,8 @@ func (i *instantSwapService) processSwap(swap models.InstantSwap, ts time.Time, 
 			Code:            1,
 			Flags: tdb_types.TransferFlags{
 				Linked:              true,
-				PostPendingTransfer: utils.FromAmount(transactions[0].Amount) <= 500000,
-				VoidPendingTransfer: utils.FromAmount(transactions[0].Amount) > 500000,
+				PostPendingTransfer: !failed,
+				VoidPendingTransfer: failed,
 			}.ToUint16(),
 		},
 		{
@@ -341,8 +341,8 @@ func (i *instantSwapService) processSwap(swap models.InstantSwap, ts time.Time, 
 			PendingID:       transactions[1].ID,
 			Code:            1,
 			Flags: tdb_types.TransferFlags{
-				PostPendingTransfer: utils.FromAmount(transactions[0].Amount) <= 500000,
-				VoidPendingTransfer: utils.FromAmount(transactions[0].Amount) > 500000,
+				PostPendingTransfer: !failed,
+				VoidPendingTransfer: failed,
 			}.ToUint16(),
 		},
 	}

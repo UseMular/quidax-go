@@ -56,13 +56,12 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 	// 	return nil, err
 	// }
 
-
 	txID := tdb_types.ID()
 	txID2 := tdb_types.ID()
 	id := uuid.New()
 	var withdrawal *models.Withdrawal
 	if destination == nil || destination.Status != "successful" {
-		w.log.Error("Error fetching internal destination", zap.Any("req", req), zap.Error(err))
+		w.log.Warn("Error fetching internal destination", zap.Any("req", req), zap.Error(err))
 		withdrawal = &models.Withdrawal{
 			ID:              id.String(),
 			WalletID:        wallet.Data.ID,
@@ -202,16 +201,6 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 		return nil, errors.HandleDataDBError(err)
 	}
 
-	if destination != nil && destination.Status == "successful" && isExternal {
-		data, err := w.depositService.FetchDeposit(context.WithValue(ctx, "skip_check", true), &requests.FetchDepositRequest{
-			UserID:        destination.Data.User.ID,
-			TransactionID: txID2.String(),
-		})
-		if err == nil {
-			go w.webhookService.SendDepositSuccessfulEvent(destination.Data.User.WebhookDetails, data.Data)
-		}
-	}
-
 	data := &responses.WithdrawalResponseData{
 		ID:              withdrawal.ID,
 		Reference:       withdrawal.Ref,
@@ -230,12 +219,27 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 		Wallet:          wallet.Data,
 		User:            wallet.Data.User,
 	}
-	go w.webhookService.SendWithdrawalSuccessfulEvent(ctx.Value("user").(*models.Account).WebhookDetails, data)
+
+	if destination != nil && destination.Status == "successful" && isExternal {
+		destData, err := w.depositService.FetchDeposit(context.WithValue(ctx, "skip_check", true), &requests.FetchDepositRequest{
+			UserID:        destination.Data.User.ID,
+			TransactionID: txID2.String(),
+		})
+		if err == nil {
+			go w.webhookService.SendDepositSuccessfulEvent(destination.Data.User.WebhookDetails, destData.Data)
+		}
+		go func(details models.WebhookDetails) {
+			time.Sleep(time.Second * 30)
+			w.webhookService.SendWithdrawalSuccessfulEvent(details, data)
+		}(ctx.Value("user").(*models.Account).WebhookDetails)
+	} else {
+		go w.webhookService.SendWithdrawalSuccessfulEvent(ctx.Value("user").(*models.Account).WebhookDetails, data)
+	}
 
 	return &responses.Response[*responses.WithdrawalResponseData]{
 		Status:  "success",
 		Message: "Successful",
-		Data: data,
+		Data:    data,
 	}, nil
 }
 

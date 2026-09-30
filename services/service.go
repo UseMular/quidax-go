@@ -20,15 +20,15 @@ type service struct {
 }
 
 var Ledgers = map[uint32]string{
-	1: "ngn",
-	2: "usdt",
-	3: "usdc",
-	4: "eth",
-	5: "bnb",
-	6: "sol",
-	7: "btc",
-	8: "trx",
-	9: "dash",
+	1:  "ngn",
+	2:  "usdt",
+	3:  "usdc",
+	4:  "eth",
+	5:  "bnb",
+	6:  "sol",
+	7:  "btc",
+	8:  "trx",
+	9:  "dash",
 	10: "ton",
 	11: "xrp",
 }
@@ -41,10 +41,10 @@ var LedgerIDs = map[string]uint32{
 	"bnb":  5,
 	"sol":  6,
 	"btc":  7,
-	"trx": 8,
+	"trx":  8,
 	"dash": 9,
-	"ton": 10,
-	"xrp": 11,
+	"ton":  10,
+	"xrp":  11,
 }
 
 var Rates = map[string]map[string]float64{

@@ -118,7 +118,9 @@ func (a *accountHandler) FetchAllSubAccounts(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *accountHandler) SupportNewToken(w http.ResponseWriter, r *http.Request) {
-	req := utils.Bind[struct {Currency string `json:"currency"`}](r)
+	req := utils.Bind[struct {
+		Currency string `json:"currency"`
+	}](r)
 
 	if err := a.accountService.SupportNewToken(r.Context(), req.Currency); err != nil {
 		errors.AsAppError(err).Serialize(w)
