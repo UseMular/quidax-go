@@ -134,8 +134,8 @@ func (w *walletService) FetchUserWallets(ctx context.Context, req *requests.Fetc
 			Networks: []any{map[string]any{
 				"id":                "bep20",
 				"name":              "Binance Smart Chain",
-				"deposits_enabled":  false,
-				"withdraws_enabled": false,
+				"deposits_enabled":  true,
+				"withdraws_enabled": true,
 			}},
 			DepositAddress: utils.String("0x34r21r3f4gr1r3rf31r2r"),
 			IsCrypto:       wallet.Token != "ngn",
@@ -201,8 +201,8 @@ func (w *walletService) FetchUserWallet(ctx context.Context, req *requests.Fetch
 		Networks: []any{map[string]any{
 			"id":                "bep20",
 			"name":              "Binance Smart Chain",
-			"deposits_enabled":  false,
-			"withdraws_enabled": false,
+			"deposits_enabled":  true,
+			"withdraws_enabled": true,
 		}},
 		DepositAddress:    utils.String("0x34r21r3f4gr1r3rf31r2r"),
 		ReferenceCurrency: "ngn",
@@ -285,8 +285,8 @@ func (w *walletService) LookupWallets(ctx context.Context, ids []string) (map[st
 			Networks: []any{map[string]any{
 				"id":                "bep20",
 				"name":              "Binance Smart Chain",
-				"deposits_enabled":  false,
-				"withdraws_enabled": false,
+				"deposits_enabled":  true,
+				"withdraws_enabled": true,
 			}},
 			DepositAddress:    utils.String("0x34r21r3f4gr1r3rf31r2r"),
 			ReferenceCurrency: "ngn",
