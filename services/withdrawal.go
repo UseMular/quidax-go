@@ -60,7 +60,7 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 	txID2 := tdb_types.ID()
 	id := uuid.New()
 	var withdrawal *models.Withdrawal
-	if destination == nil || destination.Status != "successful" {
+	if destination == nil || destination.Status != "success" {
 		w.log.Warn("Error fetching internal destination", zap.Any("req", req), zap.Error(err))
 		withdrawal = &models.Withdrawal{
 			ID:              id.String(),
@@ -126,7 +126,7 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 
 	now := time.Now()
 	isExternal := false
-	if destination == nil || destination.Status != "successful" {
+	if destination == nil || destination.Status != "success" {
 		trf := tdb_types.Transfer{
 			ID:              txID,
 			DebitAccountID:  walletID,
@@ -220,7 +220,7 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 		User:            wallet.Data.User,
 	}
 
-	if destination != nil && destination.Status == "successful" && isExternal {
+	if destination != nil && destination.Status == "success" && isExternal {
 		destData, err := w.depositService.FetchDeposit(context.WithValue(ctx, "skip_check", true), &requests.FetchDepositRequest{
 			UserID:        destination.Data.User.ID,
 			TransactionID: txID2.String(),
