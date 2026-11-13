@@ -225,6 +225,7 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 			UserID:        destination.Data.User.ID,
 			TransactionID: txID2.String(),
 		})
+		destData.Data.Type = models.Internal_RecipientType
 		if err == nil {
 			go w.webhookService.SendDepositSuccessfulEvent(destination.Data.User.WebhookDetails, destData.Data)
 		}
