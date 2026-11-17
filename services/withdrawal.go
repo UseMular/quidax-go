@@ -42,6 +42,7 @@ type withdrawalService struct {
 }
 
 func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *requests.CreateWithdrawalRequest) (*responses.Response[*responses.WithdrawalResponseData], error) {
+	time.Sleep(time.Second*31)
 	amount := utils.ApproximateAmount(req.Currency, float64(req.Amount))
 	wallet, err := w.walletService.FetchUserWallet(ctx, &requests.FetchUserWalletRequest{UserID: req.UserID, Currency: req.Currency})
 	if err != nil {
@@ -229,10 +230,7 @@ func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *reque
 		if err == nil {
 			go w.webhookService.SendDepositSuccessfulEvent(destination.Data.User.WebhookDetails, destData.Data)
 		}
-		go func(details models.WebhookDetails) {
-			time.Sleep(time.Second * 30)
-			w.webhookService.SendWithdrawalSuccessfulEvent(details, data)
-		}(ctx.Value("user").(*models.Account).WebhookDetails)
+		go w.webhookService.SendWithdrawalSuccessfulEvent(ctx.Value("user").(*models.Account).WebhookDetails, data)
 	} else {
 		go w.webhookService.SendWithdrawalSuccessfulEvent(ctx.Value("user").(*models.Account).WebhookDetails, data)
 	}

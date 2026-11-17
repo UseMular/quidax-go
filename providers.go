@@ -34,9 +34,9 @@ func NewHttpServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.S
 		Addr: env.PORT,
 		// todo: handler request logger manually
 		Handler:      gHandlers.CORS(opts...)(httplog.LoggerWithConfig(config)(handlers.RecoveryMW(mux))),
-		WriteTimeout: time.Second * 15,
-		ReadTimeout:  time.Second * 15,
-		IdleTimeout:  time.Second * 60,
+		WriteTimeout: time.Second * 90,
+		ReadTimeout:  time.Second * 90,
+		IdleTimeout:  time.Second * 90,
 	}
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
