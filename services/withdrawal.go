@@ -42,7 +42,7 @@ type withdrawalService struct {
 }
 
 func (w *withdrawalService) CreateUserWithdrawal(ctx context.Context, req *requests.CreateWithdrawalRequest) (*responses.Response[*responses.WithdrawalResponseData], error) {
-	time.Sleep(time.Second*31)
+	// time.Sleep(time.Second*31)
 	amount := utils.ApproximateAmount(req.Currency, float64(req.Amount))
 	wallet, err := w.walletService.FetchUserWallet(ctx, &requests.FetchUserWalletRequest{UserID: req.UserID, Currency: req.Currency})
 	if err != nil {
